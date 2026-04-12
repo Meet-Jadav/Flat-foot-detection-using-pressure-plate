@@ -21,7 +21,12 @@ except ImportError:
 
 def load_pressure_data(filename="subject8_stiff-legged_trial10_pressure.csv"):
     """Load a pressure CSV and flip it for display/analysis orientation."""
-    data_dir = Path(__file__).resolve().parent / "Pressure_Data"
+    script_dir = Path(__file__).resolve().parent
+    candidate_dirs = [
+        script_dir / "Pressure_Data",
+        script_dir.parent / "Pressure_Data",
+    ]
+    data_dir = next((path for path in candidate_dirs if path.exists()), candidate_dirs[0])
     file_path = data_dir / filename
 
     if not file_path.exists():
@@ -297,6 +302,17 @@ def classify_flatness(ai):
     if ai < 0.26:
         return "Mild flat foot"
     return "Severe flat foot"
+
+
+def assign_grade(ai):
+    """Temporarily map Arch Index values to grade labels."""
+    if pd.isna(ai):
+        return np.nan
+    if ai < 0.21:
+        return 0
+    if ai < 0.26:
+        return 1
+    return 2
 
 
 def analyze_foot(foot):
@@ -583,11 +599,17 @@ def main():
     print(pd.DataFrame(single_trial_results))
 
     all_results_df = process_all_trials(data_dir)
+    all_results_df["grade"] = all_results_df["arch_index"].apply(assign_grade)
+
+    labels_df = all_results_df[["subject", "condition", "trial", "foot", "grade"]]
+    labels_path = Path(__file__).resolve().parent / "flat_foot_labels.csv"
+    labels_df.to_csv(labels_path, index=False)
+
     print("\nBatch results preview:")
     print(all_results_df.head())
     print(f"\nTotal analyzed feet: {len(all_results_df)}")
+    print("Labels generated!")
 
-    labels_path = Path(__file__).resolve().parent / "flat_foot_labels.csv"
     if labels_path.exists():
         try:
             labels_df = pd.read_csv(labels_path)
