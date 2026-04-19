@@ -224,29 +224,31 @@ def align_foot_to_vertical(foot):
     rotated_foot = orient_foot_top_to_forefoot(rotated_foot)
     return crop_nonzero_region(rotated_foot)
 
+# (0-15) toe , (15-40) metatrancial , (40-65) midfoot ,(65-100) hill
 
-def split_foot_zones(foot, heel_pct=0.3, mid_pct=0.4):
-    """Divide an aligned foot into forefoot, midfoot, and heel by height."""
+def split_foot_zones(foot):
+    """Split an aligned foot into toe, metatarsal, midfoot, and heel zones."""
     h = foot.shape[0]
-    forefoot_end = int(h * (1.0 - heel_pct - mid_pct))
-    mid_end = forefoot_end + int(h * mid_pct)
+    toe_end = int(h * 0.15)
+    metatarsal_end = int(h * 0.40)
+    midfoot_end = int(h * 0.65)
 
-    forefoot = foot[:forefoot_end, :]
-    midfoot = foot[forefoot_end:mid_end, :]
-    heel = foot[mid_end:, :]
+    toe = foot[:toe_end, :]
+    metatarsal = foot[toe_end:metatarsal_end, :]
+    midfoot = foot[metatarsal_end:midfoot_end, :]
+    heel = foot[midfoot_end:, :]
 
-    return heel, midfoot, forefoot
-
+    return toe, metatarsal, midfoot, heel
 
 def compute_arch_index(foot):
-    """Calculate pressure-weighted arch index from the three foot zones."""
-    heel, midfoot, forefoot = split_foot_zones(foot)
+    """Calculate pressure-weighted arch index using metatarsal+midfoot+heel."""
+    _, metatarsal, midfoot, heel = split_foot_zones(foot)
 
     heel_area = np.sum(heel)
     mid_area = np.sum(midfoot)
-    fore_area = np.sum(forefoot)
+    metatarsal_area = np.sum(metatarsal)
 
-    total = heel_area + mid_area + fore_area
+    total = heel_area + mid_area + metatarsal_area
     if total == 0:
         return 0
 
@@ -255,15 +257,15 @@ def compute_arch_index(foot):
 
 def compute_peak_midfoot_pressure(foot):
     """Return the peak pressure in the midfoot zone."""
-    _, midfoot, _ = split_foot_zones(foot)
+    _, _, midfoot, _ = split_foot_zones(foot)
     return float(np.max(midfoot)) if midfoot.size else 0.0
 
 
 def compute_heel_forefoot_ratio(foot):
     """Return the ratio of heel pressure to forefoot pressure."""
-    heel, _, forefoot = split_foot_zones(foot)
+    toe, metatarsal, _, heel = split_foot_zones(foot)
     heel_pressure = np.sum(heel)
-    forefoot_pressure = np.sum(forefoot)
+    forefoot_pressure = np.sum(toe) + np.sum(metatarsal)
 
     if forefoot_pressure == 0:
         return 0.0
@@ -318,7 +320,7 @@ def assign_grade(ai):
 def analyze_foot(foot):
     """Compute zones, arch index, and flat-foot classification for one foot."""
     aligned_foot = align_foot_to_vertical(foot)
-    heel, midfoot, forefoot = split_foot_zones(aligned_foot)
+    toe, metatarsal, midfoot, heel = split_foot_zones(aligned_foot)
     arch_index = compute_arch_index(aligned_foot)
     peak_midfoot_pressure = compute_peak_midfoot_pressure(aligned_foot)
     heel_forefoot_ratio = compute_heel_forefoot_ratio(aligned_foot)
@@ -327,9 +329,10 @@ def analyze_foot(foot):
 
     return {
         "aligned_foot": aligned_foot,
+        "toe": toe,
+        "metatarsal": metatarsal,
         "heel": heel,
         "midfoot": midfoot,
-        "forefoot": forefoot,
         "arch_index": arch_index,
         "peak_midfoot_pressure": peak_midfoot_pressure,
         "heel_forefoot_ratio": heel_forefoot_ratio,
@@ -361,9 +364,14 @@ def show_foot_analysis(foot, analysis, foot_number):
     plt.colorbar(label="Pressure (arb. units)")
     plt.show()
 
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4))
-    zones = [analysis["heel"], analysis["midfoot"], analysis["forefoot"]]
-    zone_names = ["Heel", "Midfoot", "Forefoot"]
+    fig, axes = plt.subplots(1, 4, figsize=(16, 4))
+    zones = [
+        analysis["toe"],
+        analysis["metatarsal"],
+        analysis["midfoot"],
+        analysis["heel"],
+    ]
+    zone_names = ["Toe", "Metatarsal", "Midfoot", "Heel"]
 
     for ax, zone_name, zone in zip(axes, zone_names, zones):
         zone_image = ax.imshow(
@@ -375,7 +383,7 @@ def show_foot_analysis(foot, analysis, foot_number):
         ax.axis("off")
 
     fig.colorbar(zone_image, ax=axes, label="Pressure (arb. units)")
-    plt.suptitle(f"Foot {foot_number} Divided Into Three Zones")
+    plt.suptitle(f"Foot {foot_number} Divided Into Four Zones")
     plt.tight_layout()
     plt.show()
 
@@ -448,6 +456,36 @@ def process_all_trials(data_dir):
         results.extend(process_trial(csv_path, show_plots=False))
 
     return pd.DataFrame(results)
+
+
+def build_normal_reference_profile(features_df):
+    """Build a normal-foot reference profile from a single-class dataset."""
+    feature_columns = [
+        "arch_index",
+        "peak_midfoot_pressure",
+        "heel_forefoot_ratio",
+        "symmetry_score",
+    ]
+    valid_df = features_df.dropna(subset=feature_columns).copy()
+
+    summary_rows = []
+    for column in feature_columns:
+        values = valid_df[column]
+        mean_value = float(values.mean())
+        std_value = float(values.std(ddof=0))
+        summary_rows.append(
+            {
+                "feature": column,
+                "mean": mean_value,
+                "std": std_value,
+                "min": float(values.min()),
+                "max": float(values.max()),
+                "lower_2std": mean_value - 2 * std_value,
+                "upper_2std": mean_value + 2 * std_value,
+            }
+        )
+
+    return pd.DataFrame(summary_rows)
 
 
 def find_best_arch_index_cutoff(merged_df):
@@ -599,46 +637,27 @@ def main():
     print(pd.DataFrame(single_trial_results))
 
     all_results_df = process_all_trials(data_dir)
-    all_results_df["grade"] = all_results_df["arch_index"].apply(assign_grade)
-
-    labels_df = all_results_df[["subject", "condition", "trial", "foot", "grade"]]
-    labels_path = Path(__file__).resolve().parent / "flat_foot_labels.csv"
-    labels_df.to_csv(labels_path, index=False)
+    all_results_df["assumed_class"] = "Normal"
+    reference_profile_df = build_normal_reference_profile(all_results_df)
+    profile_path = Path(__file__).resolve().parent / "normal_reference_profile.csv"
+    results_path = Path(__file__).resolve().parent / "normal_foot_features.csv"
+    reference_profile_df.to_csv(profile_path, index=False)
+    all_results_df.to_csv(results_path, index=False)
 
     print("\nBatch results preview:")
     print(all_results_df.head())
     print(f"\nTotal analyzed feet: {len(all_results_df)}")
-    print("Labels generated!")
+    print("\nAll trials are being treated as normal-foot reference samples.")
+    print(f"Saved feature table: {results_path.name}")
+    print(f"Saved reference profile: {profile_path.name}")
+    print("\nNormal reference profile:")
+    print(reference_profile_df)
 
-    if labels_path.exists():
-        try:
-            labels_df = pd.read_csv(labels_path)
-            plot_arch_index_histogram(all_results_df, labels_df)
-
-            _, report, merged_df = train_flat_foot_classifier(
-                all_results_df,
-                labels_path,
-            )
-            print("\nTraining rows used:")
-            print(len(merged_df))
-            print("\nClassifier report:")
-            print(report)
-
-            best_cutoff, best_accuracy = find_best_arch_index_cutoff(merged_df)
-            if best_cutoff is not None:
-                print(
-                    f"\nBest Arch Index cutoff from labeled data: "
-                    f"{best_cutoff:.3f} (accuracy={best_accuracy:.2f})"
-                )
-        except Exception as exc:
-            print(f"\nClassifier training skipped: {exc}")
-    else:
-        plot_arch_index_histogram(all_results_df)
-        print(
-            "\nClassifier training skipped: add "
-            "'flat_foot_labels.csv' with columns "
-            "subject, condition, trial, foot, grade"
-        )
+    plot_arch_index_histogram(all_results_df)
+    print(
+        "\nSupervised flat-foot classifier disabled because the current "
+        "Pressure_Data folder contains only normal-foot samples."
+    )
 
 
 if __name__ == "__main__":

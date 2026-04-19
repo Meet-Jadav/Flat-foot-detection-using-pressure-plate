@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 # Load CSV
-data = pd.read_csv("Pressure_Data\\pressure.csv", header=None)
+data = pd.read_csv("Pressure_Data\\subject1_normal_trial1_pressure.csv", header=None)
 
 # Plot heatmap
 plt.figure(figsize=(6, 12))  # width, height
