@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from datetime import datetime
 from scipy.ndimage import label, rotate
 
 try:
@@ -505,6 +506,24 @@ def apply_normal_learning_model(features_df, model):
     return scored_df
 
 
+def save_dataframe_safely(dataframe, output_path):
+    """Save a DataFrame, falling back to a timestamped filename if locked."""
+    try:
+        dataframe.to_csv(output_path, index=False)
+        return output_path
+    except PermissionError:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        fallback_path = output_path.with_name(
+            f"{output_path.stem}_{timestamp}{output_path.suffix}"
+        )
+        dataframe.to_csv(fallback_path, index=False)
+        print(
+            f"Warning: could not write to {output_path.name} because the file is in use. "
+            f"Saved to {fallback_path.name} instead."
+        )
+        return fallback_path
+
+
 def plot_arch_index_histogram(features_df, labels_df=None):
     """Plot Arch Index distributions and compare them with literature cutoffs."""
     plt.figure(figsize=(9, 5))
@@ -548,9 +567,9 @@ def main():
     profile_path = Path(__file__).resolve().parent / "normal_reference_profile.csv"
     model_path = Path(__file__).resolve().parent / "normal_learning_model.csv"
     results_path = Path(__file__).resolve().parent / "normal_foot_features.csv"
-    reference_profile_df.to_csv(profile_path, index=False)
-    model_summary_df.to_csv(model_path, index=False)
-    all_results_df.to_csv(results_path, index=False)
+    profile_path = save_dataframe_safely(reference_profile_df, profile_path)
+    model_path = save_dataframe_safely(model_summary_df, model_path)
+    results_path = save_dataframe_safely(all_results_df, results_path)
 
     print("\nBatch results preview:")
     print(all_results_df.head())
