@@ -1,0 +1,7 @@
+sample_name,source_path,rows,cols,bbox_top,bbox_bottom,bbox_left,bbox_right,zone3_forefoot_start,zone3_forefoot_end,zone2_midfoot_start,zone2_midfoot_end,zone1_heel_start,zone1_heel_end,total_contact,midfoot_contact,arch_index,csi,ai_class,csi_class,binary_prediction
+fake_normal_1,E:\Flat Foot\Flat-foot-detection-using-pressure-plate\Phase-2\fake_data\fake_normal_1.csv,48,48,9,40,14,25,9,19,20,30,31,40,192,19,0.098958,8.3333,normal_or_high_arch,normal_or_high_arch,not_flatfoot
+fake_normal_2,E:\Flat Foot\Flat-foot-detection-using-pressure-plate\Phase-2\fake_data\fake_normal_2.csv,48,48,9,41,14,25,9,19,20,30,31,41,192,19,0.098958,8.3333,normal_or_high_arch,normal_or_high_arch,not_flatfoot
+fake_high_arch_1,E:\Flat Foot\Flat-foot-detection-using-pressure-plate\Phase-2\fake_data\fake_high_arch_1.csv,48,48,9,41,14,25,9,19,20,30,31,41,180,6,0.033333,8.3333,normal_or_high_arch,normal_or_high_arch,not_flatfoot
+fake_borderline_1,E:\Flat Foot\Flat-foot-detection-using-pressure-plate\Phase-2\fake_data\fake_borderline_1.csv,48,48,9,40,14,25,9,19,20,30,31,40,204,31,0.151961,8.3333,normal_or_high_arch,normal_or_high_arch,not_flatfoot
+fake_flat_1,E:\Flat Foot\Flat-foot-detection-using-pressure-plate\Phase-2\fake_data\fake_flat_1.csv,48,48,9,41,14,25,9,19,20,30,31,41,239,67,0.280335,25.0000,flatfoot,normal_or_high_arch,flatfoot
+fake_flat_severe_1,E:\Flat Foot\Flat-foot-detection-using-pressure-plate\Phase-2\fake_data\fake_flat_severe_1.csv,48,48,9,41,14,24,9,19,20,30,31,41,265,93,0.350943,45.4545,flatfoot,flatfoot,flatfoot
