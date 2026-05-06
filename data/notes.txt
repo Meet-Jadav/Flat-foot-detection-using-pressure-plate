@@ -1,0 +1,228 @@
+FLATFOOT DETECTION DATASET NOTES
+==================================
+
+Source: OHM 3000 Pressure Plate
+Raw files location: ../Pressure_Data/ (approximately 1400+ CSV files)
+
+DATASET OVERVIEW
+================
+
+Subjects:
+  - Subject 1: Primary subject with multiple trials
+  - Limited to 1-3 subjects in current dataset (HIGH VARIANCE!)
+  - Real study should have 20-30 subjects minimum
+
+Conditions:
+  1. NORMAL - Subject walking normally on pressure plate
+  2. ANTALGIC - Walking while experiencing simulated pain (changes gait)
+  3. LURCHING - Exaggerated gait pattern (jerky, asymmetric)
+  4. [Other conditions may be present; check CSV filenames]
+
+Trials:
+  - Each condition typically 15-20 trials per subject
+  - Total: ~1400 CSV files across all subjects/conditions
+  - Each trial = one trial on the pressure plate (single walk or stance)
+
+CSV FORMAT
+==========
+
+File naming convention:
+  subject{N}_{condition}_trial{M}_pressure.csv
+  Example: subject1_normal_trial1_pressure.csv
+
+File contents:
+  - 48 columns (OHM 3000 grid width)
+  - Variable row count (20-100+ rows depending on foot size)
+  - Comma-separated floating-point values (pressure in Pascal, Pa)
+  - 0.0 = no contact at that sensor position
+  - Positive value = contact pressure at that location
+  - Typical max pressure: 800-1200 Pa during gait
+
+Example grid (small):
+  ```
+  0,0,0,2,5,8,10,8,5,2,0,0,...
+  0,0,5,10,15,20,25,20,15,10,5,0,...
+  0,8,20,35,50,60,70,60,50,35,20,8,...
+  ```
+
+DATA QUALITY NOTES
+==================
+
+Issues encountered:
+  ✓ Malformed rows (trailing commas) - handled by pandas with `on_bad_lines='skip'`
+  ✓ Variable row counts - each subject has different foot size
+  ✓ Sparse grids - many zero values (efficient for sparse data, can use scipy.sparse)
+  ✓ No missing values reported yet, but check if deploying
+
+Preprocessing steps:
+  1. Load CSV as float array
+  2. Binarize: contact = (pressure > 5.0 Pa), no-contact = 0
+  3. Extract connected components (flood-fill) to separate left/right feet
+  4. Filter small noise (components < 12 cells removed)
+  5. Crop bounding boxes around feet
+
+Threshold choices:
+  - Pressure threshold 5.0 Pa: picked as "minimal reliable contact" (not sensor noise)
+    (TODO: validate on more subjects; might need 3-10 Pa for different sensors)
+  - Min area 12 cells: removes stray single pixels, keeps real contact (TODO: tune)
+
+LABELING STRATEGY
+==================
+
+AUTO-LABELING by Arch Index (Phase 1):
+  - Computed AI for each foot in every CSV
+  - AI >= 0.26 → FLATFOOT (positive class, label=1)
+  - AI < 0.26 → NORMAL (negative class, label=0)
+  - Caveat: These are auto-labels, not clinically verified!
+
+Class imbalance:
+  - Observed ratio roughly 10:1 or 15:1 (normal : flatfoot)
+  - This is REALISTIC (most people don't have severe flatfoot)
+  - BUT causes ML/DL models to underfit on minority class
+  - Solution: Weighted loss, SMOTE oversampling, or down-sample majority
+
+Data split (subject-independent):
+  - IMPORTANT: Don't mix subject trials in train/test!
+  - Subject 1 all in train, Subject 2 all in test (if available)
+  - Our current dataset: only 1-3 subjects → random split acceptable (but high variance!)
+
+FEATURE EXTRACTION NOTES (Phase 1)
+===================================
+
+20+ features extracted per foot:
+  - Arch Index (AI)
+  - Chippaux Smirak Index (CSI)
+  - Center of Pressure (CoP) coordinates (x, y)
+  - Contact area (total, per zone: forefoot/midfoot/hindfoot)
+  - Average/max pressure per zone
+  - Total contact area
+  - Foot bounding box dimensions (length, width)
+  - Peak pressure location (row, col)
+  - Pressure asymmetry index (if left/right available)
+  - [others; see phase1_rule_based/features.py]
+
+Zone definitions (spatial):
+  - Foot grid divided into 3 equal horizontal regions:
+    - Forefoot (top third): toes, ball of foot
+    - Midfoot (middle third): arch, critical for flatfoot detection
+    - Hindfoot (bottom third): heel
+  - Three-zone AI = (midfoot_area / total_area)
+
+Observations:
+  - Normal feet: AI typically 0.15-0.22 (arch clear)
+  - Borderline: AI 0.22-0.26 (borderline collapse)
+  - Flatfoot: AI > 0.26 (significant arch contact)
+  - Antalgic gait: often shifts load to heel (high hindfoot %, low midfoot %)
+  - Lurching: asymmetric pressures left vs. right
+
+DATASET STATISTICS (PRELIMINARY)
+=================================
+
+Across all ~1400 CSVs:
+  - Grid size: 48 columns (standard OHM 3000)
+  - Rows: 20-120 (depends on contact time and foot size)
+  - Total contact area per foot: 150-500 cells (roughly)
+  - Peak pressure: 400-1000 Pa range
+  - Mean pressure (where contact > 0): 30-100 Pa
+
+Arch Index distribution (estimated):
+  - Normal (AI < 0.26): ~85% of samples
+  - Flatfoot (AI >= 0.26): ~15% of samples
+  - [Need formal statistics; run on full dataset]
+
+File size:
+  - Typical CSV: 10-40 KB (uncompressed)
+  - All 1400 CSVs: ~50-100 MB total
+
+PREPROCESSING FOR ML/DL
+=======================
+
+Phase 2 (Classical ML):
+  - Feature normalization: StandardScaler (mean=0, std=1)
+  - No image resizing needed (features are scalars)
+
+Phase 3 (Deep Learning):
+  - Image resize: 64×64 pixels (fixed size for CNN input)
+  - Normalization: Min-max to [0, 1] or z-score
+  - Data augmentation (training only):
+    - Random rotation ±15°
+    - Random horizontal/vertical flip
+    - Gaussian noise (small, ~5% of max pressure)
+
+KNOWN ISSUES & TODO
+===================
+
+[!] Only 1-3 subjects - HIGH VARIANCE, OVERFITTING RISK
+    → Collect 20-30 subjects before confident deployment
+
+[!] No clinical ground truth - labels based only on AI threshold
+    → Get reference standard (podiatrist scoring)
+
+[TODO] Validate pressure threshold (5.0 Pa) on more sensors
+[TODO] Tune min_area threshold (currently 12 cells)
+[TODO] Formal descriptive statistics (mean AI by condition, etc.)
+[TODO] Cross-platform validation (does model work on GaitRite?)
+[TODO] Temporal features (gait cycle analysis)
+[TODO] Bilateral asymmetry features (left vs. right comparison)
+
+EXAMPLE FILES TO INSPECT
+=========================
+
+Start here:
+  - subject1_normal_trial1_pressure.csv
+    Expected: AI ~0.18, healthy baseline
+  
+  - subject1_antalgic_trial1_pressure.csv
+    Expected: High hindfoot load, AI ~0.19-0.22 (limp)
+  
+  - subject1_lurching_trial1_pressure.csv
+    Expected: Asymmetric or jerky pattern, AI variable
+
+Check these for outliers:
+  - Any AI > 0.40? Likely sensor error or severe pathology
+  - Any contact area < 50 cells? Possible incomplete foot scan
+  - Any peak pressure > 2000 Pa? Possible transducer malfunction
+
+HOW TO ADD NEW DATA
+===================
+
+If collecting more subjects:
+  1. Save as: subject{ID}_{condition}_trial{N}_pressure.csv
+  2. Place in ../Pressure_Data/
+  3. Run phase2_ml_models/dataset_builder.py
+     → Will auto-detect, preprocess, extract features, label by AI
+  4. New dataset.csv will have more rows; ML models may improve!
+
+CLEANUP & VALIDATION CHECKLIST
+===============================
+
+Before deploying:
+  ☐ Check for duplicate files (same data uploaded twice)
+  ☐ Visual inspection: plot 5-10 random CSVs, check reasonableness
+  ☐ Outlier check: AI distribution, max/min pressures
+  ☐ Cross-validation: Does accuracy hold on new subjects?
+  ☐ Clinical validation: Compare AI labels vs. podiatrist scoring
+  ☐ Sensor drift check: Early trials vs. late trials (same subject)
+
+STUDENT NOTES
+=============
+
+The data quality is... okay. Some CSVs have weird pressure spikes that look like sensor errors.
+Subject 1's normal trials are pretty consistent (AI 0.15-0.21 range), but antalgic trials vary a LOT
+(sometimes 0.20, sometimes 0.32). Lurching is all over the place. I'm not sure if this is real variability
+in how they lurched or if the sensor is noisy.
+
+One thing I noticed: if a foot barely touches the plate (low contact area), the AI is unreliable
+(small numbers of cells → noise-sensitive). Maybe I should filter out very small contact areas?
+
+Also, I didn't check if left/right feet are distinguishable. Some CSVs might have left foot, some right.
+Phase 1 code extracts both separately, which should be fine, but I didn't validate that the AI thresholds
+are the same for left vs. right. Clinical variability?
+
+If I had to rank data quality: 7/10. Enough to build Phase 1-3 pipeline, but NOT enough for confident
+clinical deployment. Would want 20+ subjects, clinical labels, cross-platform validation before rolling out
+to a real clinic.
+
+---
+
+Updated: [date]
