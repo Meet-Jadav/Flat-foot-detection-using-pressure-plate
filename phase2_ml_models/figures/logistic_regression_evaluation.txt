@@ -1,0 +1,9 @@
+Model: logistic_regression
+Accuracy: 0.9630
+Sensitivity: 0.9492
+Specificity: 1.0000
+F1 score: 0.9740
+AUC: 0.9998
+Confusion matrix: [[197, 0], [27, 505]]
+Saved confusion matrix: E:\Flat Foot\final\phase2_ml_models\figures\logistic_regression_confusion_matrix.png
+Saved ROC curve: E:\Flat Foot\final\phase2_ml_models\figures\logistic_regression_roc_curve.png

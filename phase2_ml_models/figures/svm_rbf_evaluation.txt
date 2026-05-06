@@ -1,0 +1,9 @@
+Model: svm_rbf
+Accuracy: 0.9287
+Sensitivity: 0.9060
+Specificity: 0.9898
+F1 score: 0.9488
+AUC: 0.9961
+Confusion matrix: [[195, 2], [50, 482]]
+Saved confusion matrix: E:\Flat Foot\final\phase2_ml_models\figures\svm_rbf_confusion_matrix.png
+Saved ROC curve: E:\Flat Foot\final\phase2_ml_models\figures\svm_rbf_roc_curve.png

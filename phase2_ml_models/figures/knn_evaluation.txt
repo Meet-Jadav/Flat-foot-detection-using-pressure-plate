@@ -1,0 +1,9 @@
+Model: knn
+Accuracy: 0.8258
+Sensitivity: 0.9511
+Specificity: 0.4873
+F1 score: 0.8885
+AUC: 0.8697
+Confusion matrix: [[96, 101], [26, 506]]
+Saved confusion matrix: E:\Flat Foot\final\phase2_ml_models\figures\knn_confusion_matrix.png
+Saved ROC curve: E:\Flat Foot\final\phase2_ml_models\figures\knn_roc_curve.png
